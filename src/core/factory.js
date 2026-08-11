@@ -40,6 +40,27 @@ function looksJson(buf) {
 }
 
 /**
+ * Real fetchRaw used by the adapter to expand `/s/<code>` share links. Follows
+ * redirects but ONLY to Suno-owned hosts (the SSRF-safe net layer enforces the
+ * host allowlist + private-range block on every hop), returning the final URL
+ * and the page body so a canonical song id can be extracted.
+ */
+async function sunoFetchRaw(url) {
+  const res = await getBuffered(url, {
+    hostAllowed: isSunoHost,
+    timeoutMs: 20000,
+    maxBytes: 4 * 1024 * 1024,
+    maxRedirects: 5,
+  });
+  return {
+    statusCode: res.statusCode,
+    headers: res.headers,
+    body: res.body,
+    finalUrl: res.finalUrl,
+  };
+}
+
+/**
  * Build a fully-wired production ImportController.
  * @param {object} opts
  * @param {string} opts.baseDir - user-selected output directory
@@ -48,7 +69,7 @@ function looksJson(buf) {
  * @param {string} [opts.tmpDir]
  */
 function createController(opts) {
-  const adapter = new SunoAdapter({ fetchJson: sunoFetchJson });
+  const adapter = new SunoAdapter({ fetchJson: sunoFetchJson, fetchRaw: sunoFetchRaw });
   const resolver = new SourceResolver({ adapter });
   const downloader = new Downloader();
   const audio = new AudioProcessor();
@@ -67,4 +88,4 @@ function createController(opts) {
   });
 }
 
-module.exports = { createController, sunoFetchJson };
+module.exports = { createController, sunoFetchJson, sunoFetchRaw };

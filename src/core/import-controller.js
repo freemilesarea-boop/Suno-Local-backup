@@ -142,6 +142,20 @@ class ImportController {
         log('resolve.blocked', { stage: 'RESOLVING', result: resolution.state });
         return job.fail(mapped.category, mapped.message);
       }
+      // Backfill the canonical track id (share links start with a null id) so
+      // duplicate detection and metadata records key off the real clip id.
+      if (!job.trackId && resolution.metadata && resolution.metadata.id) {
+        job.trackId = resolution.metadata.id;
+      }
+      // Duplicate check by canonical id — catches share URLs that resolve to an
+      // already-imported song (Layer 1, post-resolution).
+      if (job.trackId && this.metadata && (await this.metadata.hasTrack(job.trackId))) {
+        log('duplicate.skip', { stage: 'RESOLVING', result: 'SKIPPED_DUPLICATE' });
+        return job.set(JobStatus.SKIPPED_DUPLICATE, {
+          errorCategory: ErrorCategory.DUPLICATE,
+          errorMessage: 'This track has already been imported.',
+        });
+      }
       log('resolve.ok', { stage: 'RESOLVING', result: 'AVAILABLE' });
 
       // 4. DOWNLOAD (to temp)
@@ -207,7 +221,7 @@ class ImportController {
         const sidecar = await this.storage.allocatePath(base, 'json', {});
         const record = {
           id: job.trackId,
-          url: job.parsed.canonicalUrl,
+          url: (job.metadata && job.metadata.url) || job.parsed.canonicalUrl,
           title: job.metadata && job.metadata.title,
           createdAt: job.metadata && job.metadata.createdAt,
           importedAt: new Date().toISOString(),

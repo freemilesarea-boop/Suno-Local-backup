@@ -105,18 +105,98 @@ function toPositiveNumber(v) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Extract a canonical Suno song id (UUID) from a page's HTML or a final URL.
+// Looks at <link rel="canonical">, og:url, and any /song/<uuid> occurrence.
+const CANONICAL_SONG_RE =
+  /\/song\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+
+function extractCanonicalId(finalUrl, body) {
+  // 1. Prefer the final (post-redirect) URL if it is already a canonical song URL.
+  if (finalUrl) {
+    const m = String(finalUrl).match(CANONICAL_SONG_RE);
+    if (m) return m[1].toLowerCase();
+  }
+  // 2. Fall back to canonical/og:url tags, then any /song/<uuid> in the HTML.
+  const html = body ? String(body) : '';
+  if (html) {
+    const canonical = html.match(
+      /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i
+    );
+    if (canonical && canonical[1]) {
+      const m = canonical[1].match(CANONICAL_SONG_RE);
+      if (m) return m[1].toLowerCase();
+    }
+    const og = html.match(
+      /<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i
+    );
+    if (og && og[1]) {
+      const m = og[1].match(CANONICAL_SONG_RE);
+      if (m) return m[1].toLowerCase();
+    }
+    const any = html.match(CANONICAL_SONG_RE);
+    if (any) return any[1].toLowerCase();
+  }
+  return null;
+}
+
 class SunoAdapter {
   /**
    * @param {object} deps
    * @param {(url: string) => Promise<{statusCode:number, json?:any, headers?:object}>} deps.fetchJson
+   * @param {(url: string) => Promise<{statusCode:number, headers?:object, body?:Buffer|string, finalUrl?:string}>} [deps.fetchRaw]
+   *        Follows redirects (Suno hosts only) and returns the final URL + body.
    */
   constructor(deps = {}) {
     this.fetchJson = deps.fetchJson;
+    this.fetchRaw = deps.fetchRaw;
   }
 
   /** Validate + normalize a single URL. Returns the url.js parse result. */
   validate(url) {
     return parseSunoUrl(url);
+  }
+
+  /**
+   * Resolve a `/s/<code>` share link to its canonical song via normal public
+   * behavior: follow Suno's public redirect(s) and/or read the public page's
+   * canonical metadata. No auth, no private API — just what a browser sees.
+   *
+   * @param {{shareCode:string, canonicalUrl:string, originalUrl?:string}} parsed
+   * @returns {Promise<{ok:true, id:string, kind:'song', canonicalUrl:string, originalUrl:string, host:string}
+   *          | {ok:false, reason:string}>}
+   */
+  async resolveShareLink(parsed) {
+    if (typeof this.fetchRaw !== 'function') {
+      return { ok: false, reason: 'no fetchRaw dependency' };
+    }
+    if (!parsed || !parsed.shareCode) {
+      return { ok: false, reason: 'missing share code' };
+    }
+    const shareUrl = `https://suno.com/s/${parsed.shareCode}`;
+    let res;
+    try {
+      res = await this.fetchRaw(shareUrl);
+    } catch (e) {
+      return { ok: false, reason: `share fetch error: ${e.code || e.message}` };
+    }
+    if (res.statusCode === 401 || res.statusCode === 403) {
+      return { ok: false, reason: `auth required (${res.statusCode})`, authRequired: true };
+    }
+    if (res.statusCode === 404) {
+      return { ok: false, reason: 'share link not found (404)' };
+    }
+    const id = extractCanonicalId(res.finalUrl, res.body);
+    if (!id) {
+      return { ok: false, reason: 'could not derive canonical song id from share link' };
+    }
+    return {
+      ok: true,
+      id,
+      kind: 'song',
+      canonicalUrl: `https://suno.com/song/${id}`,
+      originalUrl: parsed.originalUrl || shareUrl,
+      host: 'suno.com',
+    };
   }
 
   /** Candidate public metadata endpoints for a clip id, most-preferred first. */
@@ -173,4 +253,4 @@ class SunoAdapter {
   }
 }
 
-module.exports = { SunoAdapter, parseClipMetadata, isSunoHost };
+module.exports = { SunoAdapter, parseClipMetadata, isSunoHost, extractCanonicalId };

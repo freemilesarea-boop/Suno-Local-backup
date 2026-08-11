@@ -46,10 +46,26 @@ class SourceResolver {
       return { state: Availability.UNSUPPORTED, detail: 'invalid parse result' };
     }
 
-    // Share links cannot be expanded to a canonical clip id without guessing;
-    // MVP does not support them rather than risk fetching the wrong thing.
+    // Share links (`/s/<code>`) are expanded to their canonical song via normal
+    // public redirect / canonical metadata before resolving availability.
     if (parsed.kind === 'share' || !parsed.id) {
-      return { state: Availability.UNSUPPORTED, detail: 'share links not supported in MVP' };
+      if (parsed.kind !== 'share' || !parsed.shareCode) {
+        return { state: Availability.UNSUPPORTED, detail: 'unsupported link form' };
+      }
+      let expanded;
+      try {
+        expanded = await this.adapter.resolveShareLink(parsed);
+      } catch (e) {
+        return { state: Availability.NETWORK_ERROR, detail: `share resolve error: ${e.message}` };
+      }
+      if (!expanded || expanded.ok === false) {
+        if (expanded && expanded.authRequired) {
+          return { state: Availability.AUTH_REQUIRED, detail: expanded.reason };
+        }
+        return { state: Availability.NOT_AVAILABLE, detail: (expanded && expanded.reason) || 'share resolution failed' };
+      }
+      // Continue with the canonical song parse result.
+      parsed = expanded;
     }
 
     let result;

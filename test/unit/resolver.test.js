@@ -5,8 +5,11 @@ const { SourceResolver, Availability } = require('../../src/core/resolver');
 const UUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const parsed = { ok: true, id: UUID, kind: 'song', canonicalUrl: `https://suno.com/song/${UUID}` };
 
-function resolverWith(fetchResult) {
-  const adapter = { fetchMetadata: async () => fetchResult };
+function resolverWith(fetchResult, shareResult) {
+  const adapter = {
+    fetchMetadata: async () => fetchResult,
+    resolveShareLink: async () => shareResult,
+  };
   return new SourceResolver({ adapter });
 }
 
@@ -57,10 +60,28 @@ describe('SourceResolver availability decisions', () => {
     expect(r.state).toBe(Availability.NOT_AVAILABLE);
   });
 
-  test('share links unsupported', async () => {
-    const r = await resolverWith({ status: 'ok', metadata: {} }).resolve({
-      ok: true, kind: 'share', shareCode: 'abcd', canonicalUrl: 'https://suno.com/s/abcd', id: null,
-    });
-    expect(r.state).toBe(Availability.UNSUPPORTED);
+  test('share link resolves to canonical song then becomes AVAILABLE', async () => {
+    const r = await resolverWith(
+      { status: 'ok', metadata: { id: UUID, audioUrl: `https://cdn1.suno.ai/${UUID}.mp3`, isPublic: true } },
+      { ok: true, id: UUID, kind: 'song', canonicalUrl: `https://suno.com/song/${UUID}` }
+    ).resolve({ ok: true, kind: 'share', shareCode: 'abcd', canonicalUrl: 'https://suno.com/s/abcd', id: null });
+    expect(r.state).toBe(Availability.AVAILABLE);
+    expect(r.metadata.id).toBe(UUID);
+  });
+
+  test('share link that cannot be resolved fails closed (NOT_AVAILABLE)', async () => {
+    const r = await resolverWith(
+      { status: 'error' },
+      { ok: false, reason: 'could not derive canonical song id' }
+    ).resolve({ ok: true, kind: 'share', shareCode: 'abcd', canonicalUrl: 'https://suno.com/s/abcd', id: null });
+    expect(r.state).toBe(Availability.NOT_AVAILABLE);
+  });
+
+  test('share link requiring auth maps to AUTH_REQUIRED (fail closed)', async () => {
+    const r = await resolverWith(
+      { status: 'error' },
+      { ok: false, reason: 'auth required (403)', authRequired: true }
+    ).resolve({ ok: true, kind: 'share', shareCode: 'abcd', canonicalUrl: 'https://suno.com/s/abcd', id: null });
+    expect(r.state).toBe(Availability.AUTH_REQUIRED);
   });
 });

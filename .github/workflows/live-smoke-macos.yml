@@ -1,0 +1,45 @@
+name: Live Suno Smoke (macOS)
+
+# Runs the real end-to-end pipeline against a live, publicly-accessible Suno
+# link on an internet-connected macOS runner (this repo's sandbox cannot reach
+# suno.com). Manual dispatch is preferred; a narrow push trigger on the smoke
+# files lets it run where API dispatch is unavailable.
+on:
+  workflow_dispatch:
+    inputs:
+      share_url:
+        description: 'A public Suno song or /s/ share URL you have access to'
+        required: false
+        default: ''
+  push:
+    branches:
+      - claude/suno-local-importer-mvp-7bz1iy
+    paths:
+      - 'scripts/live-smoke.js'
+      - '.github/workflows/live-smoke-macos.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  live-smoke:
+    runs-on: macos-14
+    env:
+      # Public share URL provided as this phase's explicit test input. Override
+      # via the workflow_dispatch input when running manually.
+      SHARE_URL: ${{ github.event.inputs.share_url || 'https://suno.com/s/QNkchDHN6UChu6I3' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run live smoke (real Suno request)
+        run: node scripts/live-smoke.js "$SHARE_URL" mp3+wav
