@@ -38,6 +38,34 @@ function safeAudioLoc(u) {
   }
 }
 
+// Diagnostic: print the structural shape of the share response (no secrets) so
+// we can see where Suno exposes the clip id. UUIDs are public identifiers.
+async function dumpShareDiagnostics(shareUrl) {
+  const { sunoFetchRaw } = require('../src/core/factory');
+  try {
+    const res = await sunoFetchRaw(shareUrl);
+    const body = res.body ? String(res.body) : '';
+    const uuids = Array.from(
+      new Set((body.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []).map((s) => s.toLowerCase()))
+    ).slice(0, 10);
+    const markers = ['og:url', 'og:image', 'og:audio', '__NEXT_DATA__', 'rel="canonical"', '/song/', '/clip/', 'audio_url', 'clip_id', 'cdn1.suno', 'studio-api'];
+    const present = markers.filter((m) => body.includes(m));
+    console.log('[diag] status=', res.statusCode, 'finalUrl=', res.finalUrl, 'ct=', res.headers && res.headers['content-type'], 'len=', body.length);
+    console.log('[diag] markers:', JSON.stringify(present));
+    console.log('[diag] uuids:', JSON.stringify(uuids));
+    // Redacted window around the first meta/og occurrence to see the shape.
+    for (const key of ['og:url', 'og:image', 'og:audio', 'rel="canonical"']) {
+      const i = body.indexOf(key);
+      if (i >= 0) {
+        const win = body.slice(Math.max(0, i - 20), i + 180).replace(/\?[^"'\s]+/g, '?[REDACTED]');
+        console.log(`[diag] near ${key}:`, JSON.stringify(win));
+      }
+    }
+  } catch (e) {
+    console.log('[diag] fetch error:', e.code || e.message);
+  }
+}
+
 async function main() {
   const url = process.argv[2] || process.env.SHARE_URL;
   const format = process.argv[3] || 'mp3+wav';
@@ -68,6 +96,7 @@ async function main() {
     const expanded = await adapter.resolveShareLink(parsed);
     console.log('[share-resolve]', JSON.stringify({ ok: expanded.ok, id: expanded.id, reason: expanded.reason, authRequired: expanded.authRequired }));
     if (!expanded.ok) {
+      await dumpShareDiagnostics(`https://suno.com/s/${parsed.shareCode}`);
       console.error('SHARE_RESOLUTION_FAILED — not bypassing.');
       process.exit(1);
     }
