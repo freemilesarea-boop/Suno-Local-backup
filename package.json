@@ -53,6 +53,7 @@
       ],
       "category": "public.app-category.music",
       "artifactName": "Suno-Local-Backup-mac-${arch}.${ext}",
+      "icon": "build/icon.png",
       "identity": null
     },
     "win": {

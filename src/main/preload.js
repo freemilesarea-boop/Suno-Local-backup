@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('suno', {
       destDir: String(payload && payload.destDir != null ? payload.destDir : ''),
     }),
   retryFailed: () => ipcRenderer.invoke('import:retryFailed'),
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  revealPath: (p) => ipcRenderer.invoke('shell:revealPath', String(p ?? '')),
   onJobUpdate: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_evt, snapshot) => callback(snapshot);

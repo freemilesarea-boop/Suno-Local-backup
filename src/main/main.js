@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -99,6 +99,22 @@ function registerIpc() {
 
   ipcMain.handle('config:getLastDir', async () => {
     return readConfig().lastDir || null;
+  });
+
+  ipcMain.handle('app:getVersion', async () => app.getVersion());
+
+  // Reveal a produced file in the OS file manager. Validated: must be a string
+  // pointing at an existing path. This does not read/return file contents and
+  // opens nothing but the enclosing folder.
+  ipcMain.handle('shell:revealPath', async (_evt, filePath) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false };
+    try {
+      if (!fs.existsSync(filePath)) return { ok: false };
+      shell.showItemInFolder(path.resolve(filePath));
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
   });
 
   // Parse + validate a block of URLs (no network).

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <!-- Strict CSP: no remote code, no inline handlers, self only. -->
+    <!-- Strict CSP: no remote code, no inline handlers, no inline styles. -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self';"
@@ -13,56 +13,101 @@
   </head>
   <body>
     <header class="app-header">
-      <h1>Suno Local Backup</h1>
-      <p class="subtitle">
-        Back up Suno songs you have access to — download, convert, and organize
-        them locally.
-      </p>
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 64 64" width="28" height="28" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#6557E8" />
+              <stop offset="1" stop-color="#5B8DEF" />
+            </linearGradient>
+          </defs>
+          <rect x="4" y="4" width="56" height="56" rx="15" fill="#fff" stroke="#E7E9F0" />
+          <circle cx="26" cy="38" r="6.2" fill="url(#g)" />
+          <rect x="30.6" y="16" width="4.2" height="24" rx="2.1" fill="url(#g)" />
+          <path d="M34.8 16.5c5.4 1.1 8.6 3.2 9.2 7.3-2.4-2.4-5.3-3.2-9.2-3.1z" fill="url(#g)" />
+          <path d="M40 45 L46 45 L43 50 Z" fill="url(#g)" />
+        </svg>
+        <span class="brand-name">Suno Local Backup</span>
+      </div>
     </header>
 
-    <main>
-      <section class="panel">
-        <label class="field-label" for="urls">Suno song URLs</label>
-        <p class="hint">One per line. Duplicates and blank lines are removed automatically.</p>
+    <main class="container">
+      <section class="intro">
+        <h1>Suno 곡 백업</h1>
+        <p>Suno 곡을 다운로드하고 원하는 오디오 형식으로 내 컴퓨터에 저장합니다.</p>
+      </section>
+
+      <section class="card">
+        <label class="field-label" for="urls">Suno 곡 URL</label>
+        <p class="hint">Suno 곡 페이지 URL을 입력하세요. 여러 곡은 한 줄에 하나씩 입력할 수 있습니다.</p>
         <textarea
           id="urls"
-          rows="6"
+          rows="5"
+          spellcheck="false"
           placeholder="https://suno.com/song/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
         ></textarea>
         <div id="url-summary" class="url-summary" aria-live="polite"></div>
       </section>
 
-      <section class="panel row">
-        <div class="col">
-          <span class="field-label">Output format</span>
+      <div class="two-col">
+        <section class="card">
+          <span class="field-label">출력 형식</span>
           <div class="format-options" id="format-options">
-            <label><input type="radio" name="format" value="original" checked /> Original</label>
-            <label><input type="radio" name="format" value="mp3" /> MP3</label>
-            <label><input type="radio" name="format" value="wav" /> WAV</label>
-            <label><input type="radio" name="format" value="mp3+wav" /> MP3 + WAV</label>
+            <label class="format-option">
+              <input type="radio" name="format" value="original" checked />
+              <span class="format-text"><span class="format-name">Original</span><span class="format-badge">원본 다운로드 그대로</span></span>
+            </label>
+            <label class="format-option">
+              <input type="radio" name="format" value="mp3" />
+              <span class="format-text"><span class="format-name">MP3</span><span class="format-badge">호환성 우선 · 고품질 VBR(약 190kbps)</span></span>
+            </label>
+            <label class="format-option">
+              <input type="radio" name="format" value="wav" />
+              <span class="format-text"><span class="format-name">WAV</span><span class="format-badge">PCM 16-bit · 원본 샘플레이트 유지</span></span>
+            </label>
+            <label class="format-option">
+              <input type="radio" name="format" value="mp3+wav" />
+              <span class="format-text"><span class="format-name">MP3 + WAV</span><span class="format-badge">두 형식 모두 저장</span></span>
+            </label>
           </div>
-        </div>
-        <div class="col">
-          <span class="field-label">Destination folder</span>
+        </section>
+
+        <section class="card">
+          <span class="field-label">저장 폴더</span>
+          <p class="hint">다운로드한 파일이 저장될 폴더입니다.</p>
           <div class="dest-row">
-            <button id="choose-folder" class="btn secondary" type="button">Choose folder…</button>
-            <span id="dest-path" class="dest-path" title="">No folder selected</span>
+            <span class="folder-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20" width="18" height="18"><path fill="#8A90A2" d="M2 5.5A1.5 1.5 0 0 1 3.5 4h4l1.5 1.6h7A1.5 1.5 0 0 1 17.5 7v7A1.5 1.5 0 0 1 16 15.5H3.5A1.5 1.5 0 0 1 2 14z"/></svg>
+            </span>
+            <span id="dest-path" class="dest-path" title="">폴더가 선택되지 않았습니다</span>
           </div>
+          <button id="choose-folder" class="btn secondary" type="button">폴더 선택</button>
+        </section>
+      </div>
+
+      <section class="card actions">
+        <div class="actions-buttons">
+          <button id="start" class="btn primary" type="button" disabled>다운로드 시작</button>
+          <button id="retry" class="btn secondary" type="button" disabled>실패 항목 다시 시도</button>
         </div>
+        <div id="global-status" class="status-summary" aria-live="polite"></div>
       </section>
 
-      <section class="panel controls">
-        <button id="start" class="btn primary" type="button" disabled>Start import</button>
-        <button id="retry" class="btn secondary" type="button" disabled>Retry failed</button>
-        <span id="global-status" class="global-status"></span>
-      </section>
-
-      <section class="panel">
-        <h2>Queue</h2>
+      <section class="card">
+        <h2>작업 목록</h2>
         <ul id="queue" class="queue"></ul>
-        <p id="queue-empty" class="empty">Nothing queued yet.</p>
+        <div id="queue-empty" class="empty">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="#C6CAD6" d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></svg>
+          <span>아직 다운로드 작업이 없습니다.</span>
+        </div>
       </section>
     </main>
+
+    <footer class="app-footer">
+      <span>Suno Local Backup</span>
+      <span id="app-version"></span>
+      <span>© 2026 Suno Local Backup</span>
+    </footer>
 
     <script src="renderer.js"></script>
   </body>

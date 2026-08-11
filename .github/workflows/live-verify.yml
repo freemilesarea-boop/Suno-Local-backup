@@ -1,0 +1,41 @@
+name: Live Verify (macOS)
+
+# Live regression guard: runs the REAL end-to-end import (resolve -> download ->
+# ffprobe -> WAV -> MP3 -> duplicate) for a public Suno song on an
+# internet-connected runner, to prove non-UI changes did not break the pipeline
+# (the sandbox cannot reach suno.com). Also manually dispatchable.
+on:
+  workflow_dispatch:
+    inputs:
+      song_url:
+        description: 'Public Suno song URL (https://suno.com/song/<uuid>)'
+        required: false
+        default: ''
+  push:
+    branches:
+      - claude/suno-local-importer-mvp-7bz1iy
+    paths:
+      - 'src/**'
+      - 'scripts/live-smoke.js'
+      - '.github/workflows/live-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-14
+    env:
+      SONG_URL: ${{ github.event.inputs.song_url || 'https://suno.com/song/fd6414b2-ad70-485b-9b71-c0dee2c12203' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Live end-to-end import (real download + WAV + MP3 + ffprobe)
+        run: node scripts/live-smoke.js "$SONG_URL" mp3+wav
