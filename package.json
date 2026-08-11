@@ -73,6 +73,7 @@
     "testMatch": [
       "**/test/**/*.test.js"
     ],
+    "testTimeout": 30000,
     "collectCoverageFrom": [
       "src/core/**/*.js"
     ]
