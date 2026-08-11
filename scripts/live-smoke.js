@@ -38,31 +38,31 @@ function safeAudioLoc(u) {
   }
 }
 
-// Diagnostic: print the structural shape of the share response (no secrets) so
-// we can see where Suno exposes the clip id. UUIDs are public identifiers.
+// Diagnostic: issue single (no-redirect-follow) requests to the share URL under
+// a few standard content-negotiation headers and print the raw status +
+// Location. This tells us how the PUBLIC share link behaves for a normal
+// browser request. No cookies/auth are ever sent.
+function probeOnce(shareUrl, headers) {
+  const https = require('https');
+  return new Promise((resolve) => {
+    const req = https.get(shareUrl, { headers }, (res) => {
+      res.resume();
+      resolve({ status: res.statusCode, location: res.headers.location || null, ct: res.headers['content-type'] || null });
+    });
+    req.setTimeout(15000, () => { req.destroy(); resolve({ status: 'timeout' }); });
+    req.on('error', (e) => resolve({ status: 'error', detail: e.message }));
+  });
+}
+
 async function dumpShareDiagnostics(shareUrl) {
-  const { sunoFetchRaw } = require('../src/core/factory');
-  try {
-    const res = await sunoFetchRaw(shareUrl);
-    const body = res.body ? String(res.body) : '';
-    const uuids = Array.from(
-      new Set((body.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []).map((s) => s.toLowerCase()))
-    ).slice(0, 10);
-    const markers = ['og:url', 'og:image', 'og:audio', '__NEXT_DATA__', 'rel="canonical"', '/song/', '/clip/', 'audio_url', 'clip_id', 'cdn1.suno', 'studio-api'];
-    const present = markers.filter((m) => body.includes(m));
-    console.log('[diag] status=', res.statusCode, 'finalUrl=', res.finalUrl, 'ct=', res.headers && res.headers['content-type'], 'len=', body.length);
-    console.log('[diag] markers:', JSON.stringify(present));
-    console.log('[diag] uuids:', JSON.stringify(uuids));
-    // Redacted window around the first meta/og occurrence to see the shape.
-    for (const key of ['og:url', 'og:image', 'og:audio', 'rel="canonical"']) {
-      const i = body.indexOf(key);
-      if (i >= 0) {
-        const win = body.slice(Math.max(0, i - 20), i + 180).replace(/\?[^"'\s]+/g, '?[REDACTED]');
-        console.log(`[diag] near ${key}:`, JSON.stringify(win));
-      }
-    }
-  } catch (e) {
-    console.log('[diag] fetch error:', e.code || e.message);
+  const variants = [
+    { label: 'default(*/*)', headers: { 'user-agent': 'SunoLocalBackup/0.1', accept: '*/*' } },
+    { label: 'html+honestUA', headers: { 'user-agent': 'SunoLocalBackup/0.1 (+backup tool)', accept: 'text/html,application/xhtml+xml' } },
+    { label: 'html+browserUA', headers: { 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' } },
+  ];
+  for (const v of variants) {
+    const r = await probeOnce(shareUrl, v.headers);
+    console.log(`[probe ${v.label}]`, JSON.stringify(r));
   }
 }
 
