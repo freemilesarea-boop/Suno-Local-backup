@@ -264,8 +264,87 @@ class SunoAdapter {
       }
       lastDetail = `unexpected status ${code}`;
     }
-    return { status: 'error', detail: lastDetail };
+
+    // The clip API endpoint(s) failed (e.g. 503 "Service Suspended" / DNS).
+    // Fall back to the PUBLIC song page and read the audio resource it already
+    // references for playback. This is only reached for transport/5xx errors —
+    // an explicit 401/403 (auth) or 404 returns above and is NOT bypassed.
+    const fromPage = await this.fetchMetadataFromPage(parsed);
+    if (fromPage.status === 'ok' || fromPage.status === 'auth_required' || fromPage.status === 'not_found') {
+      return fromPage;
+    }
+    return { status: 'error', detail: `${lastDetail}; page fallback: ${fromPage.detail}` };
+  }
+
+  /**
+   * Fallback metadata source: the public song page. Extracts the audio URL that
+   * matches the clip id (the exact resource the page uses for playback), plus a
+   * title/cover if present. Never fabricates fields it cannot read.
+   * @param {{id:string, canonicalUrl:string}} parsed
+   */
+  async fetchMetadataFromPage(parsed) {
+    if (typeof this.fetchRaw !== 'function') {
+      return { status: 'error', detail: 'no fetchRaw dependency' };
+    }
+    let res;
+    try {
+      res = await this.fetchRaw(`https://suno.com/song/${parsed.id}`);
+    } catch (e) {
+      return { status: 'error', detail: `page fetch error: ${e.code || e.message}` };
+    }
+    if (res.statusCode === 401 || res.statusCode === 403) {
+      return { status: 'auth_required', statusCode: res.statusCode };
+    }
+    if (res.statusCode === 404) {
+      return { status: 'not_found', statusCode: res.statusCode };
+    }
+    const body = res.body ? String(res.body) : '';
+    const audioUrl = extractPageAudioUrl(body, parsed.id);
+    if (!audioUrl) {
+      return { status: 'error', detail: 'no matching audio url on public page' };
+    }
+    const metadata = { id: parsed.id, url: parsed.canonicalUrl, audioUrl };
+    const title = extractPageTitle(body);
+    if (title) metadata.title = title;
+    const imageUrl = extractOgContent(body, 'og:image');
+    if (imageUrl) metadata.imageUrl = imageUrl;
+    return { status: 'ok', metadata, statusCode: res.statusCode };
   }
 }
 
-module.exports = { SunoAdapter, parseClipMetadata, isSunoHost, extractCanonicalId };
+// Extract the audio file URL that belongs to THIS clip from the public page.
+// Requires the clip id to appear in the URL path (so the silence placeholder
+// `sil-100.mp3` and unrelated media are ignored). The resolver additionally
+// verifies the host is Suno-owned, so a loose host match here is still safe.
+function extractPageAudioUrl(body, id) {
+  if (!body || !id) return null;
+  const re = new RegExp(
+    'https?:\\/\\/[a-z0-9.-]*suno[a-z0-9.-]*\\/[^"\'\\\\\\s]*' + id + '[^"\'\\\\\\s]*\\.(?:mp3|m4a|wav|ogg|opus|flac)',
+    'i'
+  );
+  const m = body.match(re);
+  return m ? m[0].replace(/\\u002[fF]/g, '/') : null;
+}
+
+function extractOgContent(body, prop) {
+  if (!body) return undefined;
+  const re = new RegExp('<meta[^>]+property=["\']' + prop + '["\'][^>]+content=["\']([^"\']+)["\']', 'i');
+  const m = body.match(re);
+  return m ? m[1] : undefined;
+}
+
+function extractPageTitle(body) {
+  if (!body) return undefined;
+  const og = extractOgContent(body, 'og:title');
+  let t = og;
+  if (!t) {
+    const m = body.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (m) t = m[1];
+  }
+  if (!t) return undefined;
+  // Trim common "… | Suno" / "… by X | Suno" suffixes.
+  t = t.replace(/\s*[|·-]\s*Suno(?:\s*AI)?\s*$/i, '').trim();
+  return t.length ? t : undefined;
+}
+
+module.exports = { SunoAdapter, parseClipMetadata, isSunoHost, extractCanonicalId, extractPageAudioUrl };
