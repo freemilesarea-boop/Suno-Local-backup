@@ -1,0 +1,91 @@
+name: Build macOS Apple Silicon
+
+# Manual dispatch only — no automatic push/PR triggers.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & package (macOS arm64)
+    # macos-14 is a GitHub-hosted Apple Silicon (arm64) runner.
+    runs-on: macos-14
+
+    env:
+      # This is an UNSIGNED test build: disable signing discovery so the build
+      # does not fail looking for an Apple Developer identity.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - name: Confirm runner is Apple Silicon
+        run: |
+          echo "runner arch: $(uname -m)"
+          test "$(uname -m)" = "arm64" || (echo "Runner is not arm64" && exit 1)
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Build macOS arm64 (electron-builder)
+        run: npx electron-builder --mac --arm64 --publish never
+
+      - name: List build output
+        run: ls -laR dist | sed -n '1,80p'
+
+      - name: Verify artifact existence
+        id: verify
+        run: |
+          set -e
+          shopt -s nullglob
+          artifacts=(dist/*.dmg dist/*.zip)
+          if [ ${#artifacts[@]} -eq 0 ]; then
+            echo "No .dmg/.zip artifact produced" && exit 1
+          fi
+          for a in "${artifacts[@]}"; do
+            sz=$(stat -f%z "$a")
+            echo "artifact: $a size=$sz"
+            test "$sz" -gt 0 || (echo "artifact is empty" && exit 1)
+          done
+
+      - name: Validate architecture (app, ffmpeg, ffprobe must be arm64)
+        run: |
+          set -e
+          APP=$(find dist -maxdepth 2 -name "*.app" -type d | head -1)
+          echo "app bundle: $APP"
+          test -n "$APP" || (echo "no .app bundle found" && exit 1)
+          EXE="$APP/Contents/MacOS/Suno Local Backup"
+          echo "--- app executable ---"; file "$EXE"
+          file "$EXE" | grep -q "arm64" || (echo "app exe not arm64" && exit 1)
+
+          FFMPEG=$(find "$APP/Contents" -name ffmpeg -type f | head -1)
+          echo "--- ffmpeg ---"; file "$FFMPEG"
+          file "$FFMPEG" | grep -q "arm64" || (echo "ffmpeg not arm64" && exit 1)
+          echo "--- ffprobe (arm64 slice) ---"
+          ARM_FFPROBE=$(find "$APP/Contents" -path "*darwin/arm64/ffprobe" -type f | head -1)
+          test -n "$ARM_FFPROBE" || (echo "arm64 ffprobe slice not packaged" && exit 1)
+          file "$ARM_FFPROBE"
+          file "$ARM_FFPROBE" | grep -q "arm64" || (echo "ffprobe arm64 slice invalid" && exit 1)
+          echo "Architecture validation: PASS (arm64)"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: suno-local-backup-macos-arm64
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
