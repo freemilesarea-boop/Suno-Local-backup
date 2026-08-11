@@ -48,6 +48,16 @@ describe('UI: event bindings preserved', () => {
     expect(rendererJs).toContain('KO_ERROR');
     expect(rendererJs).toContain('SOURCE_NOT_AVAILABLE');
   });
+
+  test('audit UI is present and localized, watermark not shown as "safe"', () => {
+    expect(rendererJs).toContain('buildAuditSection');
+    expect(rendererJs).toContain('KO_AI');
+    expect(rendererJs).toContain('KO_RIGHTS');
+    expect(rendererJs).toContain('파일 분석');
+    expect(rendererJs).toContain('비가시 워터마크');
+    // Watermark UNKNOWN must not be painted green "safe".
+    expect(rendererJs).not.toMatch(/워터마크[^]*state-green/);
+  });
 });
 
 describe('UI: CSP safety (no inline styles, no policy weakening)', () => {

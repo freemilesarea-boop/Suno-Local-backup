@@ -138,6 +138,24 @@ async function main() {
     }));
   }
 
+  // Provenance/rights audit of the REAL downloaded files (read-only).
+  const { createAuditor, summarize } = require('../src/core/audit');
+  const auditor = createAuditor();
+  for (const out of job.outputs) {
+    const before = require('crypto').createHash('sha256').update(fs.readFileSync(out)).digest('hex');
+    const report = await auditor.audit(out, { source: { service: 'Suno', url: songParsed.canonicalUrl, trackId: songParsed.id }, isOriginal: /original/.test(out) });
+    const after = require('crypto').createHash('sha256').update(fs.readFileSync(out)).digest('hex');
+    const s = summarize(report);
+    console.log(`[audit] ${path.basename(out)} ->`, JSON.stringify({
+      status: report.status, sha256: (s.sha256 || '').slice(0, 16), integrityStable: before === after,
+      sourceProvenance: s.sourceProvenance, ai: s.aiClassification, watermark: s.watermarkStatus, rights: s.rightsStatus,
+      sunoEvidence: s.sunoEvidenceCount, metadata: s.metadataCount, binaryHits: s.binaryEvidenceCount, privateUnknown: s.privateUnknownCount,
+    }));
+    if (before !== after) { console.error('AUDIT_MUTATED_ORIGINAL'); process.exit(6); }
+    const hx = report.hexEvidence && report.hexEvidence[0];
+    console.log(`[audit-hex] ${path.basename(out)} ->`, hx ? `${hx.offsetHex} ${hx.hex} | ${hx.ascii}` : 'NO_HEX_TEXT_EVIDENCE_FOUND');
+  }
+
   // STEP 11: duplicate — re-run the SAME url; must be SKIPPED_DUPLICATE by canonical id.
   const controller2 = createController({ baseDir: outDir, logger });
   controller2.addJobs([songParsed], { format });

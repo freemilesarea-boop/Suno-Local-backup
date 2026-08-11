@@ -8,6 +8,7 @@ const { StorageManager } = require('./storage');
 const { MetadataManager } = require('./metadata');
 const { ImportController } = require('./import-controller');
 const { getBuffered } = require('./net');
+const { createAuditor } = require('./audit');
 
 /**
  * Real fetchJson used by the adapter in production. Constrained to Suno-owned
@@ -75,6 +76,8 @@ function createController(opts) {
   const audio = new AudioProcessor();
   const storage = new StorageManager({ baseDir: opts.baseDir });
   const metadata = new MetadataManager({ baseDir: opts.baseDir });
+  // Read-only provenance auditor runs after each download (auto-audit on).
+  const auditor = opts.auditor !== null ? createAuditor() : null;
   return new ImportController({
     adapter,
     resolver,
@@ -82,6 +85,7 @@ function createController(opts) {
     audio,
     storage,
     metadata,
+    auditor,
     logger: opts.logger,
     concurrency: opts.concurrency,
     tmpDir: opts.tmpDir,

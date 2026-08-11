@@ -58,7 +58,15 @@ class ImportJob {
     this.errorMessage = null; // user-facing
     this.outputs = []; // absolute paths produced
     this.metadata = null;
+    this.audit = null; // independent post-download audit result (never affects status)
     this._onChange = typeof init.onChange === 'function' ? init.onChange : null;
+  }
+
+  /** Attach the independent audit result and notify listeners. */
+  setAudit(audit) {
+    this.audit = audit;
+    if (this._onChange) this._onChange(this.snapshot());
+    return this;
   }
 
   set(status, patch = {}) {
@@ -94,6 +102,7 @@ class ImportJob {
       errorCategory: this.errorCategory,
       errorMessage: this.errorMessage,
       outputs: this.outputs.slice(),
+      audit: this.audit,
     };
   }
 }

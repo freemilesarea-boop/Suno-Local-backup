@@ -270,3 +270,24 @@ textarea:focus {
   color: var(--faint);
   font-size: 11.5px;
 }
+
+/* Audit (파일 분석) */
+.audit { grid-column: 1 / -1; margin-top: 8px; border-top: 1px dashed var(--border); padding-top: 10px; }
+.audit-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+.audit-file { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.audit-file-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.audit-file-name { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-tag { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--card-2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+.audit-kv { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 12.5px; }
+.audit-k { color: var(--muted); }
+.audit-v { font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.audit-v.state-amber { color: var(--warn); }
+.audit-v.state-red { color: var(--err); }
+.audit-v.state-green { color: var(--ok); }
+.audit-note { color: var(--faint); font-size: 11.5px; margin: 2px 0 6px; }
+.audit-details { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+.audit-details.hidden { display: none; }
+.audit-detail-block { margin-bottom: 8px; }
+.audit-detail-h { font-weight: 600; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.audit-detail-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+.audit-detail-list li { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--text); overflow-wrap: anywhere; }

@@ -57,7 +57,128 @@ const KO_ERROR = {
   INTERNAL_ERROR: '예상치 못한 오류가 발생했습니다.',
 };
 
+const KO_AI = {
+  STRONG_EVIDENCE: '강한 증거 있음',
+  MODERATE_EVIDENCE: '중간 정도 증거',
+  WEAK_EVIDENCE: '약한 증거',
+  NO_EVIDENCE_FOUND: '증거 없음',
+  UNKNOWN: '알 수 없음',
+};
+const KO_RIGHTS = {
+  CONFIRMED_BY_EVIDENCE: '증거로 확인됨',
+  USER_DECLARED: '사용자 선언',
+  CONFLICTING_EVIDENCE: '상충하는 증거',
+  UNKNOWN: '파일만으로 확인 불가',
+  NOT_EVALUATED: '평가 안 됨',
+};
+
 const PROCESSING = ['VALIDATING', 'RESOLVING', 'DOWNLOADING', 'VERIFYING', 'CONVERTING', 'SAVING'];
+
+// Small DOM helpers (CSP-safe: textContent only, no innerHTML, no inline styles).
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+function kv(label, value, stateCls) {
+  const row = el('div', 'audit-kv');
+  row.appendChild(el('span', 'audit-k', label));
+  const v = el('span', 'audit-v' + (stateCls ? ' ' + stateCls : ''), value);
+  row.appendChild(v);
+  return row;
+}
+
+function buildAuditSection(audit) {
+  const wrap = el('div', 'audit');
+  wrap.appendChild(el('div', 'audit-title', '파일 분석'));
+  for (const f of audit.files) {
+    const s = f.summary || {};
+    const d = f.detail || {};
+    const card = el('div', 'audit-file');
+    const head = el('div', 'audit-file-head');
+    head.appendChild(el('span', 'audit-file-name', f.file));
+    head.appendChild(el('span', 'audit-tag', f.isOriginal ? '원본' : '변환'));
+    card.appendChild(head);
+
+    card.appendChild(kv('파일 무결성 (SHA-256)', (s.sha256 || '').slice(0, 16) + '…'));
+    card.appendChild(kv('출처', s.sourceProvenance || 'UNKNOWN'));
+    card.appendChild(kv('AI / 생성 출처', KO_AI[s.aiClassification] || s.aiClassification));
+    card.appendChild(kv('Suno 관련 흔적', `${s.sunoEvidenceCount || 0}개`));
+    card.appendChild(kv('파일 메타데이터', `${s.metadataCount || 0}개`));
+    card.appendChild(kv('Raw Binary 문자열', `${s.binaryEvidenceCount || 0}개`));
+    card.appendChild(
+      kv('비가시 워터마크', '확인 불가 (UNKNOWN)', 'state-amber')
+    );
+    card.appendChild(el('div', 'audit-note', '현재 지원되는 detector로는 비가시 워터마크의 존재 여부를 확인할 수 없습니다.'));
+    const rightsCls = s.rightsStatus === 'CONFLICTING_EVIDENCE' ? 'state-red' : 'state-amber';
+    card.appendChild(kv('상업적 이용 권리', KO_RIGHTS[s.rightsStatus] || s.rightsStatus, rightsCls));
+    card.appendChild(el('div', 'audit-note', '상업적 이용 가능 여부는 파일 자체만으로 확정할 수 없습니다.'));
+
+    // Details toggle
+    const toggle = el('button', 'btn link', '상세 분석 보기');
+    toggle.type = 'button';
+    const details = buildAuditDetails(d);
+    details.classList.add('hidden');
+    toggle.addEventListener('click', () => {
+      const hidden = details.classList.toggle('hidden');
+      toggle.textContent = hidden ? '상세 분석 보기' : '상세 분석 숨기기';
+    });
+    card.appendChild(toggle);
+    card.appendChild(details);
+    wrap.appendChild(card);
+  }
+  return wrap;
+}
+
+function detailList(title, items, render) {
+  const box = el('div', 'audit-detail-block');
+  box.appendChild(el('div', 'audit-detail-h', `${title} (${items.length})`));
+  const ul = el('ul', 'audit-detail-list');
+  for (const it of items.slice(0, 30)) ul.appendChild(el('li', null, render(it)));
+  box.appendChild(ul);
+  return box;
+}
+
+function buildAuditDetails(d) {
+  const box = el('div', 'audit-details');
+  const t = d.technical || {};
+  box.appendChild(
+    kv('기술 정보', `${t.sampleRate || '?'}Hz · ${t.channels || '?'}ch · ${t.duration ? t.duration.toFixed(1) + 's' : '?'} · ${t.bitRate || '?'}bps`)
+  );
+  if (d.aiProvenance && d.aiProvenance.evidence && d.aiProvenance.evidence.length) {
+    box.appendChild(detailList('AI / 출처 증거', d.aiProvenance.evidence, (e) => `[${e.family}/${e.confidence}] ${e.text || ''}`));
+  }
+  if (d.sunoEvidence && d.sunoEvidence.length) {
+    box.appendChild(detailList('Suno 증거 (binary)', d.sunoEvidence, (e) => `0x${e.offset.toString(16)} (${e.encoding}) ${e.text}`));
+  }
+  if (d.binaryEvidence && d.binaryEvidence.length) {
+    box.appendChild(detailList('Raw 문자열 증거', d.binaryEvidence, (e) => `0x${e.offset.toString(16)} [${e.families.join(',')}] ${e.text}`));
+  }
+  if (d.hexEvidence && d.hexEvidence.length) {
+    box.appendChild(detailList('Hex 증거', d.hexEvidence, (h) => `${h.offsetHex}  ${h.hex}  | ${h.ascii}`));
+  }
+  if (d.structured && d.structured.length) {
+    box.appendChild(detailList('구조화 메타데이터', d.structured, (m) => `${m.key} = ${m.value}`));
+  }
+  if (d.privateUnknown && d.privateUnknown.length) {
+    box.appendChild(detailList('미확인 / 비공개 데이터', d.privateUnknown, (p) => `${p.kind} ${p.id || p.fourCC || ''} (${p.size}B)`));
+  }
+  if (d.watermark && d.watermark.detectors) {
+    box.appendChild(detailList('워터마크 Detector', d.watermark.detectors, (dt) => `${dt.name}: ${dt.status}`));
+    for (const lim of d.watermark.limitations || []) box.appendChild(el('div', 'audit-note', lim));
+  }
+  if (d.rights) {
+    if (d.rights.evidence && d.rights.evidence.length) {
+      box.appendChild(detailList('권리 증거', d.rights.evidence, (r) => `${r.kind} (${r.confidence}) ${r.text || ''}`));
+    }
+    for (const lim of d.rights.limitations || []) box.appendChild(el('div', 'audit-note', lim));
+  }
+  if (d.warnings && d.warnings.length) {
+    box.appendChild(detailList('경고', d.warnings, (w) => `${w.stage}: ${w.error}`));
+  }
+  return box;
+}
 
 function statusClass(status) {
   if (status === 'COMPLETED') return 'completed';
@@ -163,6 +284,11 @@ function renderJob(snapshot) {
       outs.appendChild(reveal);
     }
     main.appendChild(outs);
+  }
+
+  // Completed: read-only provenance/rights audit summary + details.
+  if (snapshot.status === 'COMPLETED' && snapshot.audit && Array.isArray(snapshot.audit.files) && snapshot.audit.files.length) {
+    main.appendChild(buildAuditSection(snapshot.audit));
   }
 
   // Failed: friendly Korean message (falls back to backend message).

@@ -9,6 +9,7 @@ const { URL } = require('url');
 const { JobStatus, ImportJob, runPool } = require('./job');
 const { Availability } = require('./resolver');
 const { ErrorCategory } = require('./errors');
+const { writeSidecar, summarize, auditDetail } = require('./audit');
 
 /**
  * Import Controller — orchestrates the pipeline for each job:
@@ -79,6 +80,8 @@ class ImportController {
     this.logger = deps.logger || { info() {}, warn() {}, error() {} };
     this.concurrency = deps.concurrency || DEFAULT_CONCURRENCY;
     this.tmpDir = deps.tmpDir || path.join(os.tmpdir(), 'suno-local-backup');
+    // Optional, read-only provenance auditor. When absent, nothing changes.
+    this.auditor = deps.auditor || null;
     this.jobs = [];
   }
 
@@ -240,7 +243,19 @@ class ImportController {
 
       await safeUnlink(tmpSource);
       log('complete', { stage: 'COMPLETED', result: 'COMPLETED' });
-      return job.set(JobStatus.COMPLETED, { progress: 1 });
+      job.set(JobStatus.COMPLETED, { progress: 1 });
+
+      // Independent, read-only provenance audit. Its outcome NEVER changes the
+      // COMPLETED download status; failures are captured in job.audit only.
+      if (this.auditor) {
+        try {
+          await this._auditOutputs(job, outputs);
+        } catch (e) {
+          this.logger.warn('audit.error', { jobId: job.id, message: e && e.message });
+          job.setAudit({ status: 'AUDIT_FAILED', error: 'audit failed', files: [] });
+        }
+      }
+      return job;
     } catch (err) {
       const category = classifyError(err);
       this.logger.error('job.error', {
@@ -252,6 +267,37 @@ class ImportController {
       });
       return job.fail(category, userMessageFor(category));
     }
+  }
+
+  /**
+   * Run the read-only audit on every produced file and write a sidecar report
+   * next to each. Aggregates a compact summary onto the job. Read-only: the
+   * audited files are never modified.
+   */
+  async _auditOutputs(job, outputs) {
+    const source = {
+      service: 'Suno',
+      url: job.parsed && job.parsed.canonicalUrl,
+      trackId: job.trackId,
+      importedAt: new Date().toISOString(),
+      originalFilename: job.metadata && job.metadata.title,
+    };
+    const files = [];
+    for (const out of outputs) {
+      const isOriginal = /(^|[\\/])original[\\/]/.test(out);
+      const report = await this.auditor.audit(out, { source, isOriginal });
+      try {
+        await writeSidecar(report, `${out}.audit.json`);
+      } catch (e) {
+        this.logger.warn('audit.sidecar', { jobId: job.id, message: e && e.message });
+      }
+      files.push({ file: path.basename(out), isOriginal, summary: summarize(report), detail: auditDetail(report) });
+    }
+    const anyFailed = files.some((f) => f.summary.status === 'AUDIT_FAILED');
+    const anyPartial = files.some((f) => f.summary.status === 'AUDIT_PARTIAL');
+    const status = anyFailed ? 'AUDIT_PARTIAL' : anyPartial ? 'AUDIT_PARTIAL' : 'AUDIT_COMPLETE';
+    job.setAudit({ status, files });
+    this.logger.info('audit.done', { jobId: job.id, trackId: job.trackId, status });
   }
 }
 
