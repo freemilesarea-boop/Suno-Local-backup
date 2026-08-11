@@ -124,6 +124,22 @@ async function main() {
     const au = body.match(/"audio_url":"([^"]+)"/i);
     if (au) console.log('  raw audio_url in body=', redactUrl(au[1].replace(/\\u002F/g, '/')));
   }
+
+  // 3) Verify PUBLIC access to the audio file referenced by the page. We pick
+  //    the URL whose filename matches the clip id (not the silence placeholder),
+  //    and do a bounded ranged GET. This is the exact resource the public page
+  //    references — nothing is guessed.
+  const candidates = Array.from(new Set(body.match(/https?:\/\/[a-z0-9.-]*suno[a-z0-9.-]*\/[^"'\\\s]*\.(?:mp3|m4a|wav|ogg|opus|flac)/gi) || []));
+  const audioUrl = candidates.find((u) => u.toLowerCase().includes(id)) || null;
+  console.log('\n[audio-access] chosenUrlHostPath=', audioUrl ? redactUrl(audioUrl) : null);
+  if (audioUrl) {
+    const r = await get(audioUrl, { 'user-agent': 'SunoLocalBackup/0.1', accept: '*/*', range: 'bytes=0-1023' });
+    console.log('  status=', r.status, 'ct=', r.headers && r.headers['content-type'], 'len=', r.headers && r.headers['content-length'], 'acceptRanges=', r.headers && r.headers['accept-ranges']);
+    // Sniff: is it audio (ID3/MPEG frame) rather than HTML/JSON?
+    const head = r.body ? Buffer.from(r.body.slice(0, 4)) : Buffer.alloc(0);
+    const looksAudio = head.length >= 2 && ((head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) || (head[0] === 0xff && (head[1] & 0xe0) === 0xe0));
+    console.log('  looksAudio=', looksAudio, 'firstBytesHex=', head.toString('hex'));
+  }
 }
 
 main().catch((e) => { console.error('DIAG_ERROR:', e.message); process.exit(10); });
