@@ -9,7 +9,7 @@ const { URL } = require('url');
 const { JobStatus, ImportJob, runPool } = require('./job');
 const { Availability } = require('./resolver');
 const { ErrorCategory } = require('./errors');
-const { writeSidecar, summarize, auditDetail } = require('./audit');
+const { summarize, auditDetail } = require('./audit');
 
 /**
  * Import Controller — orchestrates the pipeline for each job:
@@ -270,9 +270,9 @@ class ImportController {
   }
 
   /**
-   * Run the read-only audit on every produced file and write a sidecar report
-   * next to each. Aggregates a compact summary onto the job. Read-only: the
-   * audited files are never modified.
+   * Run the read-only audit on every produced file and aggregate a compact
+   * summary onto the job (surfaced in the UI). No `.audit.json` sidecar is
+   * written to disk. Read-only: the audited files are never modified.
    */
   async _auditOutputs(job, outputs) {
     const source = {
@@ -285,12 +285,9 @@ class ImportController {
     const files = [];
     for (const out of outputs) {
       const isOriginal = /(^|[\\/])original[\\/]/.test(out);
+      // Audit runs in-memory only (surfaced in the UI via job.audit). No
+      // `.audit.json` sidecar is written to disk next to the extracted audio.
       const report = await this.auditor.audit(out, { source, isOriginal });
-      try {
-        await writeSidecar(report, `${out}.audit.json`);
-      } catch (e) {
-        this.logger.warn('audit.sidecar', { jobId: job.id, message: e && e.message });
-      }
       files.push({ file: path.basename(out), isOriginal, summary: summarize(report), detail: auditDetail(report) });
     }
     const anyFailed = files.some((f) => f.summary.status === 'AUDIT_FAILED');
