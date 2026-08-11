@@ -74,9 +74,17 @@ jobs:
       - name: Validate architecture (app, ffmpeg, ffprobe must be arm64)
         run: |
           set -e
-          APP=$(find dist -maxdepth 2 -name "*.app" -type d | head -1)
+          # Prefer the arm64 output directory; fall back to any bundle whose
+          # executable is arm64. Never validate an x64 bundle by accident.
+          APP=$(find dist/mac-arm64 -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            for candidate in $(find dist -maxdepth 2 -name "*.app" -type d); do
+              exe="$candidate/Contents/MacOS/Suno Local Backup"
+              if file "$exe" | grep -q "arm64"; then APP="$candidate"; break; fi
+            done
+          fi
           echo "app bundle: $APP"
-          test -n "$APP" || (echo "no .app bundle found" && exit 1)
+          test -n "$APP" || (echo "no arm64 .app bundle found" && exit 1)
           EXE="$APP/Contents/MacOS/Suno Local Backup"
           echo "--- app executable ---"; file "$EXE"
           file "$EXE" | grep -q "arm64" || (echo "app exe not arm64" && exit 1)
