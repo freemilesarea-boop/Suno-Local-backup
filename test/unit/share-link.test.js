@@ -123,6 +123,23 @@ describe('Suno share-link resolution', () => {
     expect(extractCanonicalId('https://suno.com/s/abcd', '<html>no id here</html>')).toBeNull();
   });
 
+  test('T86 share link that redirects to Suno home fails closed (observed real behavior)', async () => {
+    // Real behavior for this phase's URL: /s/<code> -> 307 -> https://suno.com/
+    // (the homepage). No canonical song id is publicly derivable, so we fail
+    // closed rather than bypass.
+    const adapter = new SunoAdapter({
+      fetchRaw: async () => ({
+        statusCode: 200,
+        finalUrl: 'https://suno.com/',
+        body: '<html><head><link rel="canonical" href="https://suno.com/"/></head><body>home</body></html>',
+      }),
+    });
+    const parsed = parseSunoUrl('https://suno.com/s/QNkchDHN6UChu6I3');
+    const r = await adapter.resolveShareLink(parsed);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/home|public resolution not available/i);
+  });
+
   test('resolveShareLink fails closed on 403 (auth) and 404 (missing)', async () => {
     const auth = new SunoAdapter({ fetchRaw: async () => ({ statusCode: 403 }) });
     const missing = new SunoAdapter({ fetchRaw: async () => ({ statusCode: 404 }) });

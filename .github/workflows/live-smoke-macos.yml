@@ -1,22 +1,16 @@
 name: Live Suno Smoke (macOS)
 
-# Runs the real end-to-end pipeline against a live, publicly-accessible Suno
-# link on an internet-connected macOS runner (this repo's sandbox cannot reach
-# suno.com). Manual dispatch is preferred; a narrow push trigger on the smoke
-# files lets it run where API dispatch is unavailable.
+# Manual-only integration smoke: runs the real end-to-end import against a
+# public Suno URL you provide, on an internet-connected macOS runner (this
+# repo's sandbox cannot reach suno.com). Nothing is hardcoded and no audio is
+# uploaded.
 on:
   workflow_dispatch:
     inputs:
       share_url:
-        description: 'A public Suno song or /s/ share URL you have access to'
-        required: false
+        description: 'A public Suno song URL (https://suno.com/song/<uuid>) or /s/ share URL you can access'
+        required: true
         default: ''
-  push:
-    branches:
-      - claude/suno-local-importer-mvp-7bz1iy
-    paths:
-      - 'scripts/live-smoke.js'
-      - '.github/workflows/live-smoke-macos.yml'
 
 permissions:
   contents: read
@@ -24,10 +18,6 @@ permissions:
 jobs:
   live-smoke:
     runs-on: macos-14
-    env:
-      # Public share URL provided as this phase's explicit test input. Override
-      # via the workflow_dispatch input when running manually.
-      SHARE_URL: ${{ github.event.inputs.share_url || 'https://suno.com/s/QNkchDHN6UChu6I3' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,4 +32,6 @@ jobs:
         run: npm ci
 
       - name: Run live smoke (real Suno request)
+        env:
+          SHARE_URL: ${{ github.event.inputs.share_url }}
         run: node scripts/live-smoke.js "$SHARE_URL" mp3+wav

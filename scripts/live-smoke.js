@@ -38,12 +38,13 @@ function safeAudioLoc(u) {
   }
 }
 
-// Diagnostic: issue single (no-redirect-follow) requests to the share URL under
-// a few standard content-negotiation headers and print the raw status +
-// Location. This tells us how the PUBLIC share link behaves for a normal
-// browser request. No cookies/auth are ever sent.
-function probeOnce(shareUrl, headers) {
+// Diagnostic: report how the PUBLIC share link behaves (first-hop status +
+// Location, no redirect following) using the app's honest User-Agent. No
+// cookies/auth are ever sent. Helps distinguish "redirects to a song" from
+// "redirects to home (needs sign-in)".
+function probeOnce(shareUrl) {
   const https = require('https');
+  const headers = { 'user-agent': 'SunoLocalBackup/0.1', accept: 'text/html,application/xhtml+xml,*/*' };
   return new Promise((resolve) => {
     const req = https.get(shareUrl, { headers }, (res) => {
       res.resume();
@@ -55,15 +56,8 @@ function probeOnce(shareUrl, headers) {
 }
 
 async function dumpShareDiagnostics(shareUrl) {
-  const variants = [
-    { label: 'default(*/*)', headers: { 'user-agent': 'SunoLocalBackup/0.1', accept: '*/*' } },
-    { label: 'html+honestUA', headers: { 'user-agent': 'SunoLocalBackup/0.1 (+backup tool)', accept: 'text/html,application/xhtml+xml' } },
-    { label: 'html+browserUA', headers: { 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' } },
-  ];
-  for (const v of variants) {
-    const r = await probeOnce(shareUrl, v.headers);
-    console.log(`[probe ${v.label}]`, JSON.stringify(r));
-  }
+  const r = await probeOnce(shareUrl);
+  console.log('[probe first-hop]', JSON.stringify(r));
 }
 
 async function main() {

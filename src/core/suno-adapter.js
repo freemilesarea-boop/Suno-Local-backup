@@ -187,7 +187,22 @@ class SunoAdapter {
     }
     const id = extractCanonicalId(res.finalUrl, res.body);
     if (!id) {
-      return { ok: false, reason: 'could not derive canonical song id from share link' };
+      // A share link that lands on the Suno home page (rather than a song) is
+      // one that isn't publicly resolvable without a signed-in session. We fail
+      // closed and never attempt to bypass that.
+      let homeRedirect = false;
+      try {
+        const fu = new URL(res.finalUrl);
+        homeRedirect = fu.hostname.endsWith('suno.com') && (fu.pathname === '/' || fu.pathname === '');
+      } catch {
+        /* ignore */
+      }
+      return {
+        ok: false,
+        reason: homeRedirect
+          ? 'share link redirected to Suno home (public resolution not available)'
+          : 'could not derive canonical song id from share link',
+      };
     }
     return {
       ok: true,
