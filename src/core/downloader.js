@@ -188,7 +188,7 @@ class Downloader {
 
         const req = transport.get(
           u,
-          { headers: { 'user-agent': 'SunoLocalBackup/0.1', accept: '*/*' } },
+          { headers: { 'user-agent': 'VerBooster/0.1', accept: '*/*' } },
           (res) => {
             const { statusCode } = res;
             if (statusCode >= 300 && statusCode < 400 && res.headers.location) {

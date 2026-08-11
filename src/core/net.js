@@ -123,7 +123,7 @@ function getBuffered(rawUrl, opts = {}) {
 
       const req = transport.get(
         u,
-        { headers: { 'user-agent': 'SunoLocalBackup/0.1', accept: '*/*', ...headers } },
+        { headers: { 'user-agent': 'VerBooster/0.1', accept: '*/*', ...headers } },
         (res) => {
           const { statusCode } = res;
           // Handle redirects.

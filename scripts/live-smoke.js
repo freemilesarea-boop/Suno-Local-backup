@@ -44,7 +44,7 @@ function safeAudioLoc(u) {
 // "redirects to home (needs sign-in)".
 function probeOnce(shareUrl) {
   const https = require('https');
-  const headers = { 'user-agent': 'SunoLocalBackup/0.1', accept: 'text/html,application/xhtml+xml,*/*' };
+  const headers = { 'user-agent': 'VerBooster/0.1', accept: 'text/html,application/xhtml+xml,*/*' };
   return new Promise((resolve) => {
     const req = https.get(shareUrl, { headers }, (res) => {
       res.resume();

@@ -102,7 +102,7 @@ jobs:
           APP=$(find dist/mac-arm64 -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
             for candidate in $(find dist -maxdepth 2 -name "*.app" -type d); do
-              exe="$candidate/Contents/MacOS/Suno Local Backup"
+              exe="$candidate/Contents/MacOS/Ver Booster"
               d="$(file -b "$exe" 2>/dev/null || true)"
               case "$d" in *x86_64*) continue ;; esac
               case "$d" in *arm64*) APP="$candidate"; break ;; esac
@@ -111,7 +111,7 @@ jobs:
           echo "app bundle: $APP"
           test -n "$APP" || { echo "FAIL: no arm64 .app bundle found"; exit 1; }
 
-          assert_arm64 "app executable" "$APP/Contents/MacOS/Suno Local Backup"
+          assert_arm64 "app executable" "$APP/Contents/MacOS/Ver Booster"
           assert_arm64 "ffmpeg" "$(find "$APP/Contents" -name ffmpeg -type f | head -1)"
           assert_arm64 "ffprobe" "$(find "$APP/Contents" -name ffprobe -type f | head -1)"
 
@@ -142,7 +142,7 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: suno-local-backup-macos-arm64
+          name: ver-booster-macos-arm64
           path: |
             dist/*.dmg
             dist/*.zip

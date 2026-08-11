@@ -1,4 +1,4 @@
-# Suno Local Backup
+# Ver Booster
 
 A local-first desktop tool to **back up, organize, and convert Suno songs you
 have legitimate access to**. Paste one or more Suno song URLs, choose an output

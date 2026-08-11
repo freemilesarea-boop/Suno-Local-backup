@@ -1,9 +1,9 @@
 {
-  "name": "suno-local-backup",
+  "name": "ver-booster",
   "version": "0.1.0",
   "private": true,
   "description": "Local-first desktop tool to back up, organize, and convert Suno songs you have legitimate access to.",
-  "author": "Suno Local Backup contributors",
+  "author": "Ver Booster contributors",
   "license": "MIT",
   "main": "src/main/main.js",
   "scripts": {
@@ -26,8 +26,8 @@
     "jest": "^29.7.0"
   },
   "build": {
-    "appId": "com.sunolocalbackup.app",
-    "productName": "Suno Local Backup",
+    "appId": "com.verbooster.app",
+    "productName": "Ver Booster",
     "files": [
       "src/**/*",
       "package.json"
@@ -52,7 +52,7 @@
         }
       ],
       "category": "public.app-category.music",
-      "artifactName": "Suno-Local-Backup-mac-${arch}.${ext}",
+      "artifactName": "Ver-Booster-mac-${arch}.${ext}",
       "icon": "build/icon.png",
       "identity": null
     },

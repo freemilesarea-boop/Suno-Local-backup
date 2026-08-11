@@ -79,7 +79,7 @@ class ImportController {
     this.metadata = deps.metadata;
     this.logger = deps.logger || { info() {}, warn() {}, error() {} };
     this.concurrency = deps.concurrency || DEFAULT_CONCURRENCY;
-    this.tmpDir = deps.tmpDir || path.join(os.tmpdir(), 'suno-local-backup');
+    this.tmpDir = deps.tmpDir || path.join(os.tmpdir(), 'ver-booster');
     // Optional, read-only provenance auditor. When absent, nothing changes.
     this.auditor = deps.auditor || null;
     this.jobs = [];
