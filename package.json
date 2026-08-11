@@ -38,20 +38,8 @@
     ],
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
+        "dmg",
+        "zip"
       ],
       "category": "public.app-category.music",
       "artifactName": "Ver-Booster-mac-${arch}.${ext}",
@@ -60,18 +48,8 @@
     },
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
-        }
+        "nsis",
+        "zip"
       ],
       "artifactName": "Ver-Booster-win-${arch}.${ext}"
     },
