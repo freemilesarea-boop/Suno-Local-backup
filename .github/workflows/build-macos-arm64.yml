@@ -1,8 +1,19 @@
 name: Build macOS Apple Silicon
 
-# Manual dispatch only — no automatic push/PR triggers.
+# Manual dispatch is the intended trigger. A branch-scoped push trigger is also
+# enabled for the release branch so the build can run in environments where API
+# workflow_dispatch is not permitted (integration lacking actions:write).
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/suno-local-importer-mvp-7bz1iy
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-macos-arm64.yml'
 
 permissions:
   contents: read
