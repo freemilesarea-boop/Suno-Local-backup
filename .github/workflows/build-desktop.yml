@@ -1,0 +1,158 @@
+name: Build desktop apps
+
+# Builds Ver Booster for every supported desktop target and uploads a
+# downloadable artifact per platform/arch:
+#   - macOS Apple Silicon (arm64)  on macos-14  -> ver-booster-macos-arm64
+#   - macOS Intel        (x64)     on macos-13  -> ver-booster-macos-x64
+#   - Windows            (x64)     on windows-latest -> ver-booster-windows-x64
+#
+# Each macOS arch is built on a native runner so the bundled ffmpeg/ffprobe are
+# real native binaries for that arch (ffmpeg-static / @ffprobe-installer resolve
+# per-arch at install time). Architecture is validated from the actual Mach-O
+# header (file -b), never from the path text.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/suno-local-importer-mvp-7bz1iy
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'build/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-desktop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-13
+            arch: x64
+    env:
+      # Unsigned build: don't look for an Apple Developer identity.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Show runner arch
+        run: uname -m
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Build macOS ${{ matrix.arch }} (electron-builder)
+        run: npx electron-builder --mac --${{ matrix.arch }} --publish never
+
+      - name: List build output
+        run: ls -laR dist | sed -n '1,60p'
+
+      - name: Validate architecture (real Mach-O, not path text)
+        env:
+          EXPECT: ${{ matrix.arch == 'arm64' && 'arm64' || 'x86_64' }}
+        run: |
+          set -e
+          OTHER=$([ "$EXPECT" = "arm64" ] && echo x86_64 || echo arm64)
+          # `file -b` prints only the type description (no path), so a directory
+          # named .../arm64/... can never cause a false positive.
+          assert() {
+            label="$1"; bin="$2"
+            test -n "$bin" && test -f "$bin" || { echo "FAIL: $label not found"; exit 1; }
+            desc="$(file -b "$bin")"
+            echo "$label: $desc"
+            case "$desc" in *"$OTHER"*) echo "FAIL: $label carries an $OTHER slice"; exit 1 ;; esac
+            case "$desc" in *"$EXPECT"*) : ;; *) echo "FAIL: $label is not $EXPECT"; exit 1 ;; esac
+          }
+          APP="$(find dist -maxdepth 2 -name '*.app' -type d | head -1)"
+          test -n "$APP" || { echo "FAIL: no .app produced"; exit 1; }
+          echo "app bundle: $APP"
+          assert "app executable" "$APP/Contents/MacOS/Ver Booster"
+          assert "ffmpeg"  "$(find "$APP/Contents" -name ffmpeg -type f | head -1)"
+          assert "ffprobe" "$(find "$APP/Contents" -name ffprobe -type f | head -1)"
+          echo "Architecture validation ($EXPECT): PASS"
+
+      - name: Verify artifacts exist and are non-empty
+        run: |
+          set -e
+          shopt -s nullglob
+          artifacts=(dist/*.dmg dist/*.zip)
+          test ${#artifacts[@]} -gt 0 || { echo "FAIL: no .dmg/.zip produced"; exit 1; }
+          for a in "${artifacts[@]}"; do
+            sz=$(stat -f%z "$a")
+            echo "artifact: $a size=$sz"
+            test "$sz" -gt 0 || { echo "FAIL: empty artifact"; exit 1; }
+          done
+
+      - name: Upload macOS ${{ matrix.arch }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ver-booster-macos-${{ matrix.arch }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Build Windows x64 (electron-builder)
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Verify artifacts exist and are non-empty
+        shell: bash
+        run: |
+          set -e
+          shopt -s nullglob
+          artifacts=(dist/*.exe dist/*.zip)
+          test ${#artifacts[@]} -gt 0 || { echo "FAIL: no .exe/.zip produced"; exit 1; }
+          for a in "${artifacts[@]}"; do
+            sz=$(stat -c%s "$a")
+            echo "artifact: $a size=$sz"
+            test "$sz" -gt 0 || { echo "FAIL: empty artifact"; exit 1; }
+          done
+
+      - name: Upload Windows x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ver-booster-windows-x64
+          path: |
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
