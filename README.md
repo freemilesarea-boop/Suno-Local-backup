@@ -20,8 +20,10 @@ per-track status queue.
   bridge).
 - **Node core modules** for all pipeline logic — pure, Electron-free, and
   unit-tested.
-- **ffmpeg-static / ffprobe-static** for audio validation and conversion
-  (invoked via `execFile` with argument arrays — never a shell string).
+- **ffmpeg-static / @ffprobe-installer/ffprobe** for audio validation and
+  conversion (invoked via `execFile` with argument arrays — never a shell
+  string). `@ffprobe-installer` selects a native per-arch binary (a real arm64
+  Mach-O on Apple Silicon).
 - **Jest** for tests.
 
 ## Architecture
@@ -64,7 +66,7 @@ Per-job lifecycle:
 ## Develop / test / build
 
 ```bash
-npm install          # installs deps (ffmpeg-static, ffprobe-static, electron, jest)
+npm install          # installs deps (ffmpeg-static, @ffprobe-installer/ffprobe, electron, jest)
 npm test             # run the Jest suite
 npm start            # launch the app (electron .)
 npm run build        # electron-builder (per-OS targets configured in package.json)

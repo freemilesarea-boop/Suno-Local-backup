@@ -7,7 +7,7 @@ const { execFile } = require('child_process');
 /**
  * Resolve the bundled ffmpeg / ffprobe binary paths.
  *
- * We reuse the packaged binaries from ffmpeg-static / ffprobe-static. When the
+ * We reuse the packaged binaries from ffmpeg-static / @ffprobe-installer. When the
  * app is packaged with Electron the binaries live inside an unpacked asar
  * directory; the `.asar` → `.asar.unpacked` rewrite handles that. No absolute
  * developer paths are ever hard-coded — everything derives from require.resolve.
@@ -31,8 +31,13 @@ function resolveFfmpegPath() {
 
 function resolveFfprobePath() {
   try {
+    // @ffprobe-installer/ffprobe selects a per-platform, per-arch NATIVE binary
+    // via optional dependencies (e.g. @ffprobe-installer/darwin-arm64 on Apple
+    // Silicon ships a real arm64 Mach-O — unlike ffprobe-static, whose darwin
+    // "arm64" path held an x86_64 binary). `.path` is the resolved binary; the
+    // asar→asar.unpacked rewrite handles the packaged layout.
     // eslint-disable-next-line global-require
-    const p = require('ffprobe-static').path;
+    const p = require('@ffprobe-installer/ffprobe').path;
     return unpacked(p);
   } catch {
     return process.env.FFPROBE_PATH || null;

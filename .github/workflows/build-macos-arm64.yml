@@ -71,33 +71,73 @@ jobs:
             test "$sz" -gt 0 || (echo "artifact is empty" && exit 1)
           done
 
-      - name: Validate architecture (app, ffmpeg, ffprobe must be arm64)
+      - name: Validate architecture (app, ffmpeg, ffprobe must be REAL arm64)
         run: |
           set -e
-          # Prefer the arm64 output directory; fall back to any bundle whose
-          # executable is arm64. Never validate an x64 bundle by accident.
+          # Assert a binary's ACTUAL Mach-O architecture — never the path text.
+          # `file -b` prints only the type description (no filename/path), so a
+          # directory literally named ".../darwin/arm64/..." can never produce a
+          # false positive. A binary is accepted iff its description contains
+          # "arm64" AND does NOT contain "x86_64" (thin arm64, not x86_64 or a
+          # fat binary that still carries an x86_64 slice).
+          assert_arm64() {
+            label="$1"; bin="$2"
+            test -n "$bin" || { echo "FAIL: $label binary not found"; exit 1; }
+            test -f "$bin" || { echo "FAIL: $label not a file: $bin"; exit 1; }
+            desc="$(file -b "$bin")"
+            echo "--- $label ---"
+            echo "path: $bin"
+            echo "arch: $desc"
+            case "$desc" in
+              *x86_64*) echo "FAIL: $label contains an x86_64 slice"; exit 1 ;;
+            esac
+            case "$desc" in
+              *arm64*) : ;;
+              *) echo "FAIL: $label is not arm64"; exit 1 ;;
+            esac
+          }
+
+          # Prefer the arm64 output directory; fall back to a bundle whose
+          # executable is genuinely arm64 (checked via file -b, not the path).
           APP=$(find dist/mac-arm64 -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
             for candidate in $(find dist -maxdepth 2 -name "*.app" -type d); do
               exe="$candidate/Contents/MacOS/Suno Local Backup"
-              if file "$exe" | grep -q "arm64"; then APP="$candidate"; break; fi
+              d="$(file -b "$exe" 2>/dev/null || true)"
+              case "$d" in *x86_64*) continue ;; esac
+              case "$d" in *arm64*) APP="$candidate"; break ;; esac
             done
           fi
           echo "app bundle: $APP"
-          test -n "$APP" || (echo "no arm64 .app bundle found" && exit 1)
-          EXE="$APP/Contents/MacOS/Suno Local Backup"
-          echo "--- app executable ---"; file "$EXE"
-          file "$EXE" | grep -q "arm64" || (echo "app exe not arm64" && exit 1)
+          test -n "$APP" || { echo "FAIL: no arm64 .app bundle found"; exit 1; }
 
+          assert_arm64 "app executable" "$APP/Contents/MacOS/Suno Local Backup"
+          assert_arm64 "ffmpeg" "$(find "$APP/Contents" -name ffmpeg -type f | head -1)"
+          assert_arm64 "ffprobe" "$(find "$APP/Contents" -name ffprobe -type f | head -1)"
+
+          # Guard: no stray x86_64 ffprobe must ship in the bundle.
+          if find "$APP/Contents" -name ffprobe -type f | while read -r f; do
+               file -b "$f" | grep -q x86_64 && echo "$f"; done | grep -q .; then
+            echo "FAIL: an x86_64 ffprobe is present in the bundle"; exit 1
+          fi
+
+          echo "Architecture validation: PASS (all three binaries are real arm64)"
+
+      - name: Native execution without Rosetta (arm64)
+        run: |
+          set -e
+          APP=$(find dist/mac-arm64 -maxdepth 1 -name "*.app" -type d 2>/dev/null | head -1)
+          test -n "$APP" || { echo "FAIL: arm64 bundle missing"; exit 1; }
           FFMPEG=$(find "$APP/Contents" -name ffmpeg -type f | head -1)
-          echo "--- ffmpeg ---"; file "$FFMPEG"
-          file "$FFMPEG" | grep -q "arm64" || (echo "ffmpeg not arm64" && exit 1)
-          echo "--- ffprobe (arm64 slice) ---"
-          ARM_FFPROBE=$(find "$APP/Contents" -path "*darwin/arm64/ffprobe" -type f | head -1)
-          test -n "$ARM_FFPROBE" || (echo "arm64 ffprobe slice not packaged" && exit 1)
-          file "$ARM_FFPROBE"
-          file "$ARM_FFPROBE" | grep -q "arm64" || (echo "ffprobe arm64 slice invalid" && exit 1)
-          echo "Architecture validation: PASS (arm64)"
+          FFPROBE=$(find "$APP/Contents" -name ffprobe -type f | head -1)
+          # `arch -arm64` forces native arm64 execution; an x86_64-only binary
+          # cannot satisfy it, so a successful -version run is native-arm64 proof
+          # that does NOT depend on Rosetta 2.
+          echo "--- ffmpeg (arch -arm64) ---"
+          arch -arm64 "$FFMPEG" -version | head -1
+          echo "--- ffprobe (arch -arm64) ---"
+          arch -arm64 "$FFPROBE" -version | head -1
+          echo "Native arm64 execution: PASS"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
