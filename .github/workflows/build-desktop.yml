@@ -29,15 +29,18 @@ permissions:
 jobs:
   macos:
     name: macOS ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
+    # Both arches build on Apple Silicon (macos-14). The x64 job cross-installs
+    # native x64 ffmpeg/ffprobe so it does not depend on scarce macos-13 Intel
+    # runners. Architecture is still asserted from the real Mach-O header.
+    runs-on: macos-14
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
-            arch: arm64
-          - runner: macos-13
-            arch: x64
+          - arch: arm64
+            cross: false
+          - arch: x64
+            cross: true
     env:
       # Unsigned build: don't look for an Apple Developer identity.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -52,15 +55,28 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
-      - name: Install dependencies (npm ci)
+      - name: Install dependencies (native arm64)
+        if: ${{ !matrix.cross }}
         run: npm ci
 
+      - name: Install dependencies (cross x64 — native x64 binaries)
+        if: ${{ matrix.cross }}
+        env:
+          npm_config_arch: x64
+          npm_config_platform: darwin
+        run: npm ci --cpu=x64 --os=darwin
+
       - name: Run automated tests
+        # Only on the native arm64 job; the x64 binaries can't run on this
+        # Apple Silicon runner without Rosetta. x64 correctness is covered by the
+        # arm64 + Windows jobs plus the real Mach-O arch check below.
+        if: ${{ !matrix.cross }}
         run: npm test
 
       - name: Build macOS ${{ matrix.arch }} (electron-builder)
+        env:
+          npm_config_arch: ${{ matrix.arch }}
         run: npx electron-builder --mac --${{ matrix.arch }} --publish never
 
       - name: List build output
