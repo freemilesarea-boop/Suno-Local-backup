@@ -18,8 +18,6 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    env:
-      SONG_URL: https://suno.com/song/0e7a88a8-d4db-4434-ab37-691bf47b8b2b
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,5 +27,7 @@ jobs:
           node-version: '22'
       - name: Install dependencies (npm ci)
         run: npm ci
-      - name: Diagnose source (read-only)
-        run: node scripts/source-diagnose.js "$SONG_URL"
+      - name: Diagnose the failing song (read-only)
+        run: node scripts/source-diagnose.js "https://suno.com/song/0e7a88a8-d4db-4434-ab37-691bf47b8b2b"
+      - name: Diagnose a previously-working song for comparison (read-only)
+        run: node scripts/source-diagnose.js "https://suno.com/song/fd6414b2-ad70-485b-9b71-c0dee2c12203"
