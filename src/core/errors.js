@@ -17,6 +17,7 @@ const ErrorCategory = Object.freeze({
   DUPLICATE: 'DUPLICATE',
   UNSUPPORTED: 'UNSUPPORTED',
   POLICY_BLOCKED: 'POLICY_BLOCKED',
+  SOURCE_BLOCKED: 'SOURCE_BLOCKED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 });
 
@@ -33,6 +34,8 @@ const USER_MESSAGES = Object.freeze({
   DUPLICATE: 'This track has already been imported.',
   UNSUPPORTED: 'This kind of link is not supported.',
   POLICY_BLOCKED: 'This track cannot be imported due to access restrictions.',
+  SOURCE_BLOCKED:
+    "Suno now serves this track's audio only through a signed URL, so it can't be downloaded by URL. For songs you own, use Suno's official Download, then import the file here.",
   INTERNAL_ERROR: 'An unexpected error occurred.',
 });
 

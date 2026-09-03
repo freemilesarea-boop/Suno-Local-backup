@@ -49,6 +49,12 @@ describe('UI: event bindings preserved', () => {
     expect(rendererJs).toContain('SOURCE_NOT_AVAILABLE');
   });
 
+  test('SOURCE_BLOCKED shows the honest signed-URL message pointing to official Download', () => {
+    expect(rendererJs).toContain('SOURCE_BLOCKED');
+    expect(rendererJs).toMatch(/서명된 URL/);
+    expect(rendererJs).toMatch(/Download/);
+  });
+
   test('audit UI is present and localized, watermark not shown as "safe"', () => {
     expect(rendererJs).toContain('buildAuditSection');
     expect(rendererJs).toContain('KO_AI');

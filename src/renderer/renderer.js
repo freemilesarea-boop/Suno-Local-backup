@@ -54,6 +54,7 @@ const KO_ERROR = {
   DUPLICATE: '이미 가져온 곡입니다.',
   UNSUPPORTED: '지원하지 않는 링크입니다.',
   POLICY_BLOCKED: '접근 제한으로 이 곡을 가져올 수 없습니다.',
+  SOURCE_BLOCKED: 'Suno가 이 곡 오디오를 서명된 URL로만 제공하도록 바꿔, URL 방식 다운로드가 불가합니다. 소유하신 곡은 Suno 공식 Download로 받은 뒤 여기서 불러오세요.',
   INTERNAL_ERROR: '예상치 못한 오류가 발생했습니다.',
 };
 

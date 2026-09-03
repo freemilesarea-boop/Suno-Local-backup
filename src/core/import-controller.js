@@ -327,6 +327,8 @@ function classifyError(err) {
   if (code === 'PROBE_FAILED' || code === 'NO_AUDIO_STREAM' || code === 'BAD_DURATION') return ErrorCategory.INVALID_AUDIO;
   if (code === 'HOST_NOT_ALLOWED' || code === 'PRIVATE_HOST' || code === 'BAD_PROTOCOL') return ErrorCategory.POLICY_BLOCKED;
   if (code === 'TIMEOUT' || code === 'REQ_ERROR' || code === 'RES_ERROR' || code === 'NET_ERROR') return ErrorCategory.NETWORK_ERROR;
+  // 401/403 on the audio object = source is access-restricted (signed URL now required).
+  if (code === 'HTTP_FORBIDDEN') return ErrorCategory.SOURCE_BLOCKED;
   if (code && code.startsWith && code.startsWith('HTTP_')) return ErrorCategory.DOWNLOAD_FAILED;
   if (err && err.name === 'DownloadError') return ErrorCategory.DOWNLOAD_FAILED;
   if (err && (err.code === 'ENOENT' || err.code === 'EACCES' || err.code === 'ENOSPC')) return ErrorCategory.STORAGE_ERROR;

@@ -71,6 +71,23 @@ describe('Downloader', () => {
     expect(fs.existsSync(dest + '.part')).toBe(false);
   });
 
+  test('T18c 403 (signed-URL required) fails fast as HTTP_FORBIDDEN, no retry', async () => {
+    let hits = 0;
+    server = await startServer({
+      '/locked.mp3': (req, res) => {
+        hits += 1;
+        res.writeHead(403, { 'content-type': 'text/xml' });
+        res.end('<?xml version="1.0"?><Error><Code>AccessDenied</Code></Error>');
+      },
+    });
+    const dest = path.join(dir, 'locked.mp3');
+    await expect(
+      newDownloader().download({ url: server.url('/locked.mp3'), destPath: dest, ...openPolicy })
+    ).rejects.toMatchObject({ code: 'HTTP_FORBIDDEN' });
+    expect(hits).toBe(1); // not retried — a signed URL won't appear on retry
+    expect(fs.existsSync(dest)).toBe(false);
+  });
+
   test('T19 zero-byte download rejected', async () => {
     server = await startServer({
       '/empty.mp3': (req, res) => {

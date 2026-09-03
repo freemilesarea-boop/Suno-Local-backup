@@ -133,7 +133,9 @@ class Downloader {
         await this._cleanup(partPath);
         // Do not retry on non-transient / policy errors.
         if (err.code === 'CANCELLED' || err.code === 'NOT_AUDIO' || err.code === 'ZERO_BYTE'
-          || err.code === 'BAD_PROTOCOL' || err.code === 'HOST_NOT_ALLOWED' || err.code === 'PRIVATE_HOST') {
+          || err.code === 'BAD_PROTOCOL' || err.code === 'HOST_NOT_ALLOWED' || err.code === 'PRIVATE_HOST'
+          || err.code === 'HTTP_FORBIDDEN') {
+          // 401/403 won't change on retry (a signed URL is required) — fail fast.
           throw err;
         }
         if (attempt < cfg.maxRetries) {
@@ -207,10 +209,16 @@ class Downloader {
             }
             if (statusCode < 200 || statusCode >= 300) {
               res.resume();
-              return done(
-                reject,
-                new DownloadError(`http status ${statusCode}`, statusCode >= 500 ? 'HTTP_5XX' : 'HTTP_4XX')
-              );
+              // 401/403 on the audio object means the source is access-restricted
+              // (Suno now serves audio only via signed URLs). Distinguish it so
+              // the UI can explain the real reason instead of a generic failure.
+              const code =
+                statusCode === 401 || statusCode === 403
+                  ? 'HTTP_FORBIDDEN'
+                  : statusCode >= 500
+                    ? 'HTTP_5XX'
+                    : 'HTTP_4XX';
+              return done(reject, new DownloadError(`http status ${statusCode}`, code));
             }
 
             const contentType = res.headers['content-type'] || null;
